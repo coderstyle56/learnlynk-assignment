@@ -146,6 +146,12 @@ Add a section titled:
 
 ```
 ## Stripe Answer
+
+To implement Stripe Checkout for the application fee, I would first create a `payment_requests` row in the database when a user initiates the payment, storing the application_id, amount, and initial status (“pending”). Then, on the server, I would call `stripe.checkout.sessions.create()` with the amount, currency, success_url, and cancel_url, and include the payment_request_id inside `metadata`. The session URL would be returned to the frontend so the user can complete the payment.
+
+Next, I would create a Stripe webhook endpoint to handle events like `checkout.session.completed`. When Stripe confirms success, the webhook updates the `payment_requests` row to “paid”, stores the Stripe session ID, and logs relevant transaction metadata. Finally, I would update the related application’s stage (e.g., “payment_received”) and maybe append a timeline event so counselors can see that the payment was completed.
+
+
 ```
 
 Write **8–12 lines** describing how you would implement a Stripe Checkout flow for an application fee, including:

@@ -2,24 +2,43 @@
 
 alter table public.leads enable row level security;
 
--- Example helper: assume JWT has tenant_id, user_id, role.
--- You can use: current_setting('request.jwt.claims', true)::jsonb
-
--- TODO: write a policy so:
--- - counselors see leads where they are owner_id OR in one of their teams
--- - admins can see all leads of their tenant
-
-
--- Example skeleton for SELECT (replace with your own logic):
-
-create policy "leads_select_policy"
+---------------------------------------------------------
+-- SELECT Policy
+---------------------------------------------------------
+create policy "allow_admins_and_counselors_to_read_leads"
 on public.leads
 for select
 using (
-  true
-  -- TODO: add real RLS logic here, refer to README instructions
+  (
+    -- Admins can read all leads in their tenant
+    (auth.jwt() ->> 'role') = 'admin'
+    and tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+  )
+  or
+  (
+    -- Counselors can read leads they own
+    (auth.jwt() ->> 'role') = 'counselor'
+    and owner_id = auth.uid()
+  )
+  or
+  (
+    -- Counselors can read leads if they belong to a team in the same tenant
+    (auth.jwt() ->> 'role') = 'counselor'
+    and tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+    and exists (
+      select 1 from public.user_teams ut
+      where ut.user_id = auth.uid()
+    )
+  )
 );
 
--- TODO: add INSERT policy that:
--- - allows counselors/admins to insert leads for their tenant
--- - ensures tenant_id is correctly set/validated
+---------------------------------------------------------
+-- INSERT Policy
+---------------------------------------------------------
+create policy "allow_admins_and_counselors_to_insert_leads"
+on public.leads
+for insert
+with check (
+  tenant_id = (auth.jwt() ->> 'tenant_id')::uuid
+  and (auth.jwt() ->> 'role') in ('admin', 'counselor')
+);
